@@ -41,14 +41,14 @@ export default function DashboardLayout({
     <Providers>
       <main className="flex min-h-screen w-full flex-col bg-muted/40">
         <DesktopNav />
-        <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-14">
+        <div className="flex flex-col sm:gap-2 sm:py-2 sm:pl-14">
           <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
             <MobileNav />
             <DashboardBreadcrumb />
             <SearchInput />
             <User />
           </header>
-          <main className="grid flex-1 items-start gap-2 p-4 sm:px-6 sm:py-0 md:gap-4 bg-muted/40">
+          <main className="grid flex-1 items-start gap-2 p-2 sm:px-4 sm:py-0 md:gap-2 bg-muted/40 w-full">
             {children}
           </main>
         </div>
@@ -70,7 +70,7 @@ function DesktopNav() {
           <span className="sr-only">Acme Inc</span>
         </Link>
 
-        <NavItem href="#" label="Dashboard">
+        <NavItem href="/dashboard" label="Dashboard">
           <Home className="h-5 w-5" />
         </NavItem>
 
@@ -78,7 +78,7 @@ function DesktopNav() {
           <ShoppingCart className="h-5 w-5" />
         </NavItem>
 
-        <NavItem href="/" label="Products">
+        <NavItem href="/dashboard/products/learning-templates" label="Products">
           <Package className="h-5 w-5" />
         </NavItem>
 
@@ -127,7 +127,7 @@ function MobileNav() {
             <span className="sr-only">Vercel</span>
           </Link>
           <Link
-            href="#"
+            href="/dashboard"
             className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground"
           >
             <Home className="h-5 w-5" />

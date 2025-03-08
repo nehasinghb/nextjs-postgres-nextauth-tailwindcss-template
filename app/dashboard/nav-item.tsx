@@ -19,6 +19,10 @@ export function NavItem({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  
+  // Check if current path starts with href to highlight the appropriate nav item
+  const isActive = pathname === href || 
+                  (href !== '#' && href !== '/' && pathname.startsWith(href));
 
   return (
     <Tooltip>
@@ -28,7 +32,7 @@ export function NavItem({
           className={clsx(
             'flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8',
             {
-              'bg-accent text-black': pathname === href
+              'bg-accent text-black': isActive
             }
           )}
         >
