@@ -41,31 +41,34 @@ export interface Template {
   options: Option[];
 }
 
-// API helper functions
+// Update base path to use /admin/api instead of /api
+const API_BASE = '/admin/api';
+
+// API helper functions - updated to use admin API path
 async function fetchTemplates(includeInactive = false) {
-  const { data } = await axios.get('/api/learning-templates', {
+  const { data } = await axios.get(`${API_BASE}/learning-templates`, {
     params: { includeInactive }
   });
   return data;
 }
 
 async function fetchTemplateById(id: string) {
-  const { data } = await axios.get(`/api/learning-templates/${id}`);
+  const { data } = await axios.get(`${API_BASE}/learning-templates/${id}`);
   return data;
 }
 
 async function createTemplate(template: Partial<Template>) {
-  const { data } = await axios.post('/api/learning-templates', template);
+  const { data } = await axios.post(`${API_BASE}/learning-templates`, template);
   return data;
 }
 
 async function updateTemplate(id: string, template: Partial<Template>) {
-  const { data } = await axios.put(`/api/learning-templates/${id}`, template);
+  const { data } = await axios.put(`${API_BASE}/learning-templates/${id}`, template);
   return data;
 }
 
 async function deleteTemplate(id: string) {
-  const { data } = await axios.delete(`/api/learning-templates/${id}`);
+  const { data } = await axios.delete(`${API_BASE}/learning-templates/${id}`);
   return data;
 }
 

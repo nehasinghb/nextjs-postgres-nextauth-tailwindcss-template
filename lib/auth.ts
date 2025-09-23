@@ -7,10 +7,13 @@ import type { JwtPayload } from 'jsonwebtoken'
 
 export async function signOut() {
   // This removes the 'token' cookie, effectively logging the user out
-  cookies().delete('token');
+  const cookieStore = await cookies();
+  cookieStore.delete('token');
 }
+
 export async function auth() {
-  const token = cookies().get('token')?.value;
+  const cookieStore = await cookies(); // Await cookies first
+  const token = cookieStore.get('token')?.value;
   if (!token) {
     return null;
   }
