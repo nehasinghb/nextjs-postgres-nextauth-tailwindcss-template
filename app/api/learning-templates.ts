@@ -291,7 +291,7 @@ export async function createTemplate(templateData: any) {
 }
 
 
-// Complete updateTemplate function that handles all operations
+// Complete updateTemplate function that properly handles phases
 export async function updateTemplate(templateId: string, templateData: any) {
   console.log(`[updateTemplate] Starting for template ${templateId}`);
   console.log(`[updateTemplate] Options count: ${templateData.options?.length || 0}`);
@@ -387,10 +387,11 @@ export async function updateTemplate(templateId: string, templateData: any) {
             }
           }
         } else {
-          // EXISTING option - update it
+          // EXISTING option - update it AND handle its phases
           console.log(`[updateTemplate] Updating existing option ${option.id}: ${option.name}`);
           optionsInNewData.push(option.id);
           
+          // Update the option itself
           await query(
             `UPDATE learning_options
              SET name = $1, description = $2, updated_at = CURRENT_TIMESTAMP
@@ -398,8 +399,80 @@ export async function updateTemplate(templateId: string, templateData: any) {
             [option.name, option.description || null, option.id]
           );
           
-          // Simple phase handling - just update basic info, don't do deep updates
-          // This prevents the timeout issue we had before
+          // Handle phases for this existing option
+          if (option.phases && Array.isArray(option.phases)) {
+            console.log(`[updateTemplate] Processing ${option.phases.length} phases for option ${option.id}`);
+            
+            // Get existing phases for this option
+            const existingPhasesResult = await query(
+              `SELECT phase_id FROM learning_phases WHERE option_id = $1`,
+              [option.id]
+            );
+            const existingPhaseIds = existingPhasesResult.rows.map((p: any) => p.phase_id);
+            console.log(`[updateTemplate] Found ${existingPhaseIds.length} existing phases`);
+            
+            const phasesInNewData: string[] = [];
+            
+            // Process each phase
+            for (let i = 0; i < option.phases.length; i++) {
+              const phase = option.phases[i];
+              
+              if (!phase.id || phase.id.startsWith('temp-')) {
+                // NEW phase - create it
+                console.log(`[updateTemplate] Creating new phase: ${phase.title}`);
+                
+                await query(
+                  `INSERT INTO learning_phases 
+                   (option_id, title, description, icon, color, background_color, sequence_number)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                  [
+                    option.id,
+                    phase.title || 'New Phase',
+                    phase.description || null,
+                    phase.icon || 'brain',
+                    phase.color || 'rgba(98, 102, 241, 1)',
+                    phase.backgroundColor || phase.background_color || 'rgba(98, 102, 241, 0.1)',
+                    i + 1
+                  ]
+                );
+              } else {
+                // EXISTING phase - update it
+                console.log(`[updateTemplate] Updating existing phase ${phase.id}: ${phase.title}`);
+                phasesInNewData.push(phase.id);
+                
+                await query(
+                  `UPDATE learning_phases
+                   SET title = $1, description = $2, icon = $3, color = $4, 
+                       background_color = $5, sequence_number = $6, updated_at = CURRENT_TIMESTAMP
+                   WHERE phase_id = $7`,
+                  [
+                    phase.title,
+                    phase.description || null,
+                    phase.icon,
+                    phase.color,
+                    phase.backgroundColor || phase.background_color,
+                    i + 1,
+                    phase.id
+                  ]
+                );
+              }
+            }
+            
+            // Delete phases that are not in the new data
+            const phasesToDelete = existingPhaseIds.filter(
+              (id: string) => !phasesInNewData.includes(id)
+            );
+            
+            if (phasesToDelete.length > 0) {
+              console.log(`[updateTemplate] Deleting ${phasesToDelete.length} removed phases`);
+              for (const phaseId of phasesToDelete) {
+                await query(
+                  `DELETE FROM learning_phases WHERE phase_id = $1`,
+                  [phaseId]
+                );
+              }
+            }
+          }
         }
       }
       
@@ -429,7 +502,6 @@ export async function updateTemplate(templateId: string, templateData: any) {
     throw error;
   }
 }
-
 
 // Create an option
 export async function createOption(optionData: any) {
