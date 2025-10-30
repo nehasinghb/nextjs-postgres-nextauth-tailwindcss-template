@@ -1035,77 +1035,108 @@ const MetricForm = ({
     };
   
     const handleEditPhase = (phase: Phase) => {
+      // Find which option contains this phase
+      if (selectedTemplateId) {
+        const currentTemplate = templates.find(t => t.id === selectedTemplateId);
+        if (currentTemplate) {
+          for (const option of currentTemplate.options) {
+            if (option.phases.some(p => p.id === phase.id)) {
+              setSelectedOptionId(option.id);
+              break;
+            }
+          }
+        }
+      }
       setActivePhase(phase);
       setDialogMode('edit');
       setIsPhaseDialogOpen(true);
     };
   
     const handleSavePhase = (phaseData: Partial<Phase>) => {
-      if (!selectedTemplateId || !selectedOptionId) return;
-      
-      const currentTemplate = templates.find(t => t.id === selectedTemplateId);
-      if (!currentTemplate) return;
-      
-      const currentOption = currentTemplate.options.find(o => o.id === selectedOptionId);
-      if (!currentOption) return;
-      
-      if (dialogMode === 'add') {
-        // Add new phase to option
-        const newPhase: Phase = {
-          id: `temp-${Date.now()}`, // Temporary ID, will be replaced by server
-          title: phaseData.title || 'New Phase',
-          description: phaseData.description || '',
-          icon: phaseData.icon || 'brain',
-          color: phaseData.color || 'rgba(98, 102, 241, 1)',
-          backgroundColor: phaseData.backgroundColor || 'rgba(98, 102, 241, 0.1)',
-          metrics: []
-        };
-        
-        const updatedOptions = currentTemplate.options.map(o => {
-          if (o.id === selectedOptionId) {
-            return {
-              ...o,
-              phases: [...o.phases, newPhase]
-            };
-          }
-          return o;
-        });
-        
-        updateTemplate({
-          id: selectedTemplateId,
-          template: {
-            ...currentTemplate,
-            options: updatedOptions
-          }
-        });
-      } else {
-        // Update existing phase
-        if (phaseData.id && activePhase) {
-          const updatedOptions = currentTemplate.options.map(o => {
-            if (o.id === selectedOptionId) {
-              return {
-                ...o,
-                phases: o.phases.map(p => 
-                  p.id === phaseData.id ? { ...p, ...phaseData, metrics: p.metrics } : p
-                )
-              };
-            }
-            return o;
-          });
-          
-          updateTemplate({
-            id: selectedTemplateId,
-            template: {
-              ...currentTemplate,
-              options: updatedOptions
-            }
-          });
-        }
+  if (!selectedTemplateId) return;
+  
+  const currentTemplate = templates.find(t => t.id === selectedTemplateId);
+  if (!currentTemplate) return;
+  
+  // For edit mode, find which option contains the phase
+  let targetOptionId = selectedOptionId;
+  
+  if (dialogMode === 'edit' && phaseData.id && !targetOptionId) {
+    // Find the option that contains this phase
+    for (const option of currentTemplate.options) {
+      if (option.phases.some(p => p.id === phaseData.id)) {
+        targetOptionId = option.id;
+        break;
       }
-      
-      setIsPhaseDialogOpen(false);
-      setActivePhase(null);
+    }
+  }
+  
+  if (!targetOptionId) {
+    console.error('Could not find option for phase');
+    return;
+  }
+  
+  const currentOption = currentTemplate.options.find(o => o.id === targetOptionId);
+  if (!currentOption) return;
+  
+  if (dialogMode === 'add') {
+    // Add new phase to option
+    const newPhase: Phase = {
+      id: `temp-${Date.now()}`, // Temporary ID, will be replaced by server
+      title: phaseData.title || 'New Phase',
+      description: phaseData.description || '',
+      icon: phaseData.icon || 'brain',
+      color: phaseData.color || 'rgba(98, 102, 241, 1)',
+      backgroundColor: phaseData.backgroundColor || 'rgba(98, 102, 241, 0.1)',
+      metrics: []
     };
+    
+    const updatedOptions = currentTemplate.options.map(o => {
+      if (o.id === targetOptionId) {
+        return {
+          ...o,
+          phases: [...o.phases, newPhase]
+        };
+      }
+      return o;
+    });
+    
+    updateTemplate({
+      id: selectedTemplateId,
+      template: {
+        ...currentTemplate,
+        options: updatedOptions
+      }
+    });
+  } else {
+    // Update existing phase
+    if (phaseData.id && activePhase) {
+      const updatedOptions = currentTemplate.options.map(o => {
+        if (o.id === targetOptionId) {
+          return {
+            ...o,
+            phases: o.phases.map(p => 
+              p.id === phaseData.id ? { ...p, ...phaseData, metrics: p.metrics } : p
+            )
+          };
+        }
+        return o;
+      });
+      
+      updateTemplate({
+        id: selectedTemplateId,
+        template: {
+          ...currentTemplate,
+          options: updatedOptions
+        }
+      });
+    }
+  }
+  
+  setIsPhaseDialogOpen(false);
+  setActivePhase(null);
+  setSelectedOptionId(null);
+};
   
     const handleDeletePhase = (phaseId: string) => {
       if (!selectedTemplateId || !confirm('Are you sure you want to delete this phase? This action cannot be undone.')) {
