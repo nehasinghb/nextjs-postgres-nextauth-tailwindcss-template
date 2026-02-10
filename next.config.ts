@@ -1,4 +1,5 @@
 export default {
+  basePath: '/admin',
   images: {
     remotePatterns: [
       {

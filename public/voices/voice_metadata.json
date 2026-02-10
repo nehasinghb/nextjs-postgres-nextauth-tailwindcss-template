@@ -1,0 +1,102 @@
+{
+  "voices": [
+    {
+      "id": "af",
+      "friendly_name": "Professor Amy",
+      "filename": "Professor_Amy.mp3",
+      "type": "Adult Female",
+      "sample_text": "Welcome to Weeble. I'm Professor Amy. I can explain complex concepts and guide your academic journey."
+    },
+    {
+      "id": "af_bella",
+      "friendly_name": "Teacher Bella",
+      "filename": "Teacher_Bella.mp3",
+      "type": "Adult Female",
+      "sample_text": "Welcome to Weeble! I'm Teacher Bella. I'm here to help you learn step-by-step with patience and encouragement."
+    },
+    {
+      "id": "af_irulan",
+      "friendly_name": "Tutor Iris",
+      "filename": "Tutor_Iris.mp3",
+      "type": "Adult Female",
+      "sample_text": "Welcome to Weeble. I'm Tutor Iris. Think of me as your personal guide through any subject you're studying."
+    },
+    {
+      "id": "af_jadzia",
+      "friendly_name": "Coach Jade",
+      "filename": "Coach_Jade.mp3",
+      "type": "Adult Female",
+      "sample_text": "Welcome to Weeble! I'm Coach Jade. I'll keep you motivated and on track to achieve your learning goals!"
+    },
+    {
+      "id": "af_nicole",
+      "friendly_name": "Narrator Nora",
+      "filename": "Narrator_Nora.mp3",
+      "type": "Adult Female",
+      "sample_text": "Welcome to Weeble. I'm Narrator Nora. I can bring stories and information to life with clear and engaging narration."
+    },
+    {
+      "id": "af_sarah",
+      "friendly_name": "Scholar Sara",
+      "filename": "Scholar_Sara.mp3",
+      "type": "Adult Female",
+      "sample_text": "Welcome to Weeble. I'm Scholar Sara. I specialize in deep analysis and thoughtful exploration of complex topics."
+    },
+    {
+      "id": "af_sky",
+      "friendly_name": "Scientist Sky",
+      "filename": "Scientist_Sky.mp3",
+      "type": "Adult Female",
+      "sample_text": "Welcome to Weeble. I'm Scientist Sky. I communicate technical and scientific concepts with precision and clarity."
+    },
+    {
+      "id": "am_adam",
+      "friendly_name": "Professor Adam",
+      "filename": "Professor_Adam.mp3",
+      "type": "Adult Male",
+      "sample_text": "Welcome to Weeble. I'm Professor Adam. I specialize in breaking down difficult subjects into clear explanations."
+    },
+    {
+      "id": "am_gurney",
+      "friendly_name": "Teacher Greg",
+      "filename": "Teacher_Greg.mp3",
+      "type": "Adult Male",
+      "sample_text": "Welcome to Weeble! I'm Teacher Greg. I make learning fun and engaging with practical examples."
+    },
+    {
+      "id": "am_michael",
+      "friendly_name": "Tutor Max",
+      "filename": "Tutor_Max.mp3",
+      "type": "Adult Male",
+      "sample_text": "Welcome to Weeble. I'm Tutor Max. I'll work with you one-on-one to master any topic at your own pace."
+    },
+    {
+      "id": "bf_emma",
+      "friendly_name": "Student Emma",
+      "filename": "Student_Emma.mp3",
+      "type": "Young Female",
+      "sample_text": "Hey there! Welcome to Weeble! I'm Emma. I'll be your study buddy and help explain things just like a classmate would."
+    },
+    {
+      "id": "bf_isabella",
+      "friendly_name": "Helper Izzy",
+      "filename": "Helper_Izzy.mp3",
+      "type": "Young Female",
+      "sample_text": "Hi! Welcome to Weeble! I'm Izzy. I'm always ready to lend a hand with anything you're working on!"
+    },
+    {
+      "id": "bm_george",
+      "friendly_name": "Student George",
+      "filename": "Student_George.mp3",
+      "type": "Young Male",
+      "sample_text": "Hi! Welcome to Weeble! I'm George. I'm here to help out with your questions in a relaxed, friendly way."
+    },
+    {
+      "id": "bm_lewis",
+      "friendly_name": "Helper Leo",
+      "filename": "Helper_Leo.mp3",
+      "type": "Young Male",
+      "sample_text": "Hey! Welcome to Weeble! I'm Leo. I'm here to support you with any challenges you're facing!"
+    }
+  ]
+}

@@ -1,9 +1,32 @@
-// app/api/learning-templates.ts
-
+// app/api/learning-templates.ts - UPDATED: AI at phase level
 import { db, query } from '@/lib/db';
 import { auth } from '@/lib/auth';
 
-// Types from database
+export type TemplateCategory = 'reading' | 'problem-solving' | 'lecture';
+export type ComplexityLevel = 'easy' | 'medium' | 'hard';
+
+// Complexity configuration types (TEMPLATE LEVEL)
+export interface ComplexityConfig {
+  name: string;
+  description: string;
+  targetAccuracy: number;
+  aiPrompt: string;
+}
+
+export interface ComplexityLevels {
+  easy: ComplexityConfig;
+  medium: ComplexityConfig;
+  hard: ComplexityConfig;
+}
+
+// AI content generation types (PHASE LEVEL)
+export interface AIContentGeneration {
+  enabled: boolean;
+  capabilities: string[];
+  basePrompt: string;
+}
+
+// Database types
 export interface LearningTemplate {
   template_id: string;
   name: string;
@@ -12,6 +35,8 @@ export interface LearningTemplate {
   is_default: boolean;
   is_active: boolean;
   created_by: string | null;
+  template_category: TemplateCategory;
+  complexity_levels?: ComplexityLevels | null;
   created_at: Date;
   updated_at: Date;
   options?: LearningOption[];
@@ -36,6 +61,7 @@ export interface LearningPhase {
   color: string;
   background_color: string;
   sequence_number: number;
+  ai_content_generation?: AIContentGeneration | null; // AI AT PHASE LEVEL
   created_at: Date;
   updated_at: Date;
   metrics?: PhaseMetric[];
@@ -55,9 +81,89 @@ export interface PhaseMetric {
   updated_at: Date;
 }
 
+// Default configurations
+export const DEFAULT_COMPLEXITY_LEVELS: ComplexityLevels = {
+  easy: {
+    name: 'Basic Review',
+    description: 'Fundamental concepts and first-order questions',
+    targetAccuracy: 75,
+    aiPrompt: 'Generate basic content focusing on fundamental concepts and recall.'
+  },
+  medium: {
+    name: 'Standard Review',
+    description: 'Clinical application with 2-step reasoning',
+    targetAccuracy: 65,
+    aiPrompt: 'Generate intermediate content with clinical vignettes and application.'
+  },
+  hard: {
+    name: 'Advanced Review',
+    description: 'Complex integration and atypical cases',
+    targetAccuracy: 55,
+    aiPrompt: 'Generate advanced content with complex scenarios and edge cases.'
+  }
+};
+
+export const DEFAULT_AI_CONTENT_GENERATION: AIContentGeneration = {
+  enabled: true,
+  capabilities: [
+    'generate_summaries',
+    'create_practice_questions',
+    'identify_key_concepts'
+  ],
+  basePrompt: 'You are an educational expert helping students learn effectively.'
+};
+
+// Helper function to detect category
+function detectCategoryFromTemplate(templateData: any): TemplateCategory {
+  if (templateData.templateCategory) {
+    const validCategories: TemplateCategory[] = ['reading', 'problem-solving', 'lecture'];
+    if (validCategories.includes(templateData.templateCategory)) {
+      return templateData.templateCategory;
+    }
+  }
+  
+  const nameLower = (templateData.name || '').toLowerCase();
+  const descLower = (templateData.description || '').toLowerCase();
+  const iconLower = (templateData.icon || '').toLowerCase();
+  
+  const problemKeywords = ['problem', 'solving', 'solve', 'exercise', 'question', 'practice', 'case', 'math', 'calculate'];
+  if (problemKeywords.some(keyword => nameLower.includes(keyword) || descLower.includes(keyword))) {
+    return 'problem-solving';
+  }
+  
+  const lectureKeywords = ['lecture', 'video', 'watch', 'viewing', 'presentation', 'lesson', 'tutorial'];
+  if (lectureKeywords.some(keyword => nameLower.includes(keyword) || descLower.includes(keyword))) {
+    return 'lecture';
+  }
+  
+  if (iconLower.includes('math') || iconLower.includes('calculator')) {
+    return 'problem-solving';
+  }
+  if (iconLower.includes('video') || iconLower.includes('play')) {
+    return 'lecture';
+  }
+  if (iconLower.includes('book') || iconLower.includes('read')) {
+    return 'reading';
+  }
+  
+  return 'reading';
+}
+
 // Helper functions to convert between database and UI models
 export function toUITemplate(template: LearningTemplate): any {
-  return {
+  console.log('[toUITemplate] Converting:', template.name);
+  
+  let complexityLevels = template.complexity_levels;
+  if (typeof complexityLevels === 'string') {
+    try {
+      complexityLevels = JSON.parse(complexityLevels);
+    } catch (e) {
+      console.error('[toUITemplate] Parse error complexity:', e);
+      complexityLevels = null;
+    }
+  }
+  
+  const result = {
     id: template.template_id,
     name: template.name,
     description: template.description,
@@ -65,8 +171,12 @@ export function toUITemplate(template: LearningTemplate): any {
     isDefault: template.is_default,
     isActive: template.is_active,
     createdBy: template.created_by,
+    templateCategory: template.template_category,
+    complexityLevels: complexityLevels,
     options: template.options?.map(toUIOption) || []
   };
+  
+  return result;
 }
 
 export function toUIOption(option: LearningOption): any {
@@ -79,6 +189,17 @@ export function toUIOption(option: LearningOption): any {
 }
 
 export function toUIPhase(phase: LearningPhase): any {
+  // Parse AI config if it's a string
+  let aiContentGeneration = phase.ai_content_generation;
+  if (typeof aiContentGeneration === 'string') {
+    try {
+      aiContentGeneration = JSON.parse(aiContentGeneration);
+    } catch (e) {
+      console.error('[toUIPhase] Parse error AI:', e);
+      aiContentGeneration = null;
+    }
+  }
+  
   return {
     id: phase.phase_id,
     title: phase.title,
@@ -86,6 +207,7 @@ export function toUIPhase(phase: LearningPhase): any {
     icon: phase.icon,
     color: phase.color,
     backgroundColor: phase.background_color,
+    aiContentGeneration: aiContentGeneration, // AI AT PHASE LEVEL
     metrics: phase.metrics?.map(toUIMetric) || []
   };
 }
@@ -109,18 +231,16 @@ export function toUIMetric(metric: PhaseMetric): any {
   };
 }
 
-// API to get all templates with options
+// API FUNCTIONS
+
 export async function getTemplates(includeInactive = false) {
   try {
-    const whereClause = includeInactive ? {} : { is_active: true };
-    
     const result = await query(`
       SELECT * FROM learning_templates
       ${!includeInactive ? 'WHERE is_active = true' : ''}
       ORDER BY is_default DESC, name ASC
     `);
     
-    // Extract rows from result
     const templates = result.rows;
 
     const templatesWithOptions = await Promise.all(
@@ -137,19 +257,15 @@ export async function getTemplates(includeInactive = false) {
   }
 }
 
-// Get options by template ID
 export async function getOptionsByTemplateId(templateId: string) {
   try {
     const result = await query(
-      `
-      SELECT * FROM learning_options
-      WHERE template_id = $1
-      ORDER BY name ASC
-    `,
+      `SELECT * FROM learning_options
+       WHERE template_id = $1
+       ORDER BY name ASC`,
       [templateId]
     );
 
-    // Extract rows from result
     const options = result.rows;
 
     const optionsWithPhases = await Promise.all(
@@ -166,19 +282,15 @@ export async function getOptionsByTemplateId(templateId: string) {
   }
 }
 
-// Get phases by option ID
 export async function getPhasesByOptionId(optionId: string) {
   try {
     const result = await query(
-      `
-      SELECT * FROM learning_phases
-      WHERE option_id = $1
-      ORDER BY sequence_number ASC
-    `,
+      `SELECT * FROM learning_phases
+       WHERE option_id = $1
+       ORDER BY sequence_number ASC`,
       [optionId]
     );
 
-    // Extract rows from result
     const phases = result.rows;
 
     const phasesWithMetrics = await Promise.all(
@@ -195,19 +307,15 @@ export async function getPhasesByOptionId(optionId: string) {
   }
 }
 
-// Get metrics by phase ID
 export async function getMetricsByPhaseId(phaseId: string) {
   try {
     const result = await query(
-      `
-      SELECT * FROM phase_metrics
-      WHERE phase_id = $1
-      ORDER BY sequence_number ASC
-    `,
+      `SELECT * FROM phase_metrics
+       WHERE phase_id = $1
+       ORDER BY sequence_number ASC`,
       [phaseId]
     );
 
-    // Extract rows from result
     return result.rows;
   } catch (error) {
     console.error(`Error fetching metrics for phase ${phaseId}:`, error);
@@ -215,18 +323,13 @@ export async function getMetricsByPhaseId(phaseId: string) {
   }
 }
 
-// Get single template with all details
 export async function getTemplateById(templateId: string) {
   try {
     const result = await query(
-      `
-      SELECT * FROM learning_templates
-      WHERE template_id = $1
-    `,
+      `SELECT * FROM learning_templates WHERE template_id = $1`,
       [templateId]
     );
 
-    // Extract first row from result
     const template = result.rows[0];
 
     if (!template) {
@@ -243,34 +346,49 @@ export async function getTemplateById(templateId: string) {
   }
 }
 
-// --------------------------------------------------------------------------------
-// Create a new template (CHANGED: removed auth() and used system@example.com user)
-// --------------------------------------------------------------------------------
-// Fixed createTemplate function - removes created_by column reference
 export async function createTemplate(templateData: any) {
   try {
-    // 1) Read session from JWT cookie (optional - for future use)
+    console.log('[createTemplate] Starting template creation');
+    
     const session = await auth();
     if (!session || !session.user) {
       throw new Error('Authentication required');
     }
 
-    // 2) Insert the template WITHOUT created_by since that column doesn't exist
+    let templateCategory = templateData.templateCategory;
+    
+    if (!templateCategory) {
+      templateCategory = detectCategoryFromTemplate(templateData);
+      console.log('[createTemplate] Auto-detected category:', templateCategory);
+    }
+    
+    const validCategories: TemplateCategory[] = ['reading', 'problem-solving', 'lecture'];
+    if (!validCategories.includes(templateCategory)) {
+      throw new Error(`Invalid template category: ${templateCategory}`);
+    }
+
+    const complexityLevels = templateData.complexityLevels || DEFAULT_COMPLEXITY_LEVELS;
+
+    // Insert the template (NO AI config here)
     const newTemplateResult = await query(`
       INSERT INTO learning_templates
-        (name, description, icon, is_default, is_active)
-      VALUES ($1, $2, $3, $4, $5)
+        (name, description, icon, is_default, is_active, template_category, complexity_levels)
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
       RETURNING *
     `, [
       templateData.name,
       templateData.description,
       templateData.icon,
-      false, // new templates are never default
-      templateData.isActive !== undefined ? templateData.isActive : true
+      false,
+      templateData.isActive !== undefined ? templateData.isActive : true,
+      templateCategory,
+      JSON.stringify(complexityLevels)
     ]);
+    
     const newTemplate = newTemplateResult.rows[0];
+    console.log('[createTemplate] Template created');
 
-    // 3) Create options if provided
+    // Create options with their phases
     if (templateData.options && templateData.options.length > 0) {
       await Promise.all(
         templateData.options.map(async (option: any) => {
@@ -282,237 +400,19 @@ export async function createTemplate(templateData: any) {
       );
     }
 
-    // 4) Return the newly created template (with all nested options, phases, metrics)
     return await getTemplateById(newTemplate.template_id);
   } catch (error) {
-    console.error('Error creating template:', error);
+    console.error('[createTemplate] Error:', error);
     throw new Error('Failed to create learning template');
   }
 }
 
-
-// Complete updateTemplate function that properly handles phases
-export async function updateTemplate(templateId: string, templateData: any) {
-  console.log(`[updateTemplate] Starting for template ${templateId}`);
-  console.log(`[updateTemplate] Options count: ${templateData.options?.length || 0}`);
-  
-  try {
-    // Check auth
-    const session = await auth();
-    if (!session || !session.user) {
-      throw new Error('Authentication required');
-    }
-
-    // Check if template exists
-    const templateResult = await query(
-      `SELECT * FROM learning_templates WHERE template_id = $1`,
-      [templateId]
-    );
-
-    const template = templateResult.rows[0];
-    if (!template) {
-      throw new Error('Template not found');
-    }
-
-    // Check permissions
-    if (template.is_default && !isAdmin(session)) {
-      throw new Error('Not authorized to modify default templates');
-    }
-
-    // Update template metadata
-    console.log('[updateTemplate] Updating template metadata...');
-    await query(
-      `UPDATE learning_templates
-       SET name = $1, description = $2, icon = $3, is_active = $4, updated_at = CURRENT_TIMESTAMP
-       WHERE template_id = $5`,
-      [
-        templateData.name,
-        templateData.description,
-        templateData.icon,
-        templateData.isActive !== undefined ? templateData.isActive : template.is_active,
-        templateId
-      ]
-    );
-    console.log('[updateTemplate] Template metadata updated');
-
-    // Handle options if provided
-    if (templateData.options && Array.isArray(templateData.options)) {
-      console.log(`[updateTemplate] Processing ${templateData.options.length} options...`);
-      
-      // Get existing options
-      const existingOptionsResult = await query(
-        `SELECT option_id FROM learning_options WHERE template_id = $1`,
-        [templateId]
-      );
-      const existingOptionIds = existingOptionsResult.rows.map((o: any) => o.option_id);
-      console.log(`[updateTemplate] Found ${existingOptionIds.length} existing options`);
-      
-      // Track which options are in the new data
-      const optionsInNewData: string[] = [];
-      
-      // Process each option
-      for (const option of templateData.options) {
-        if (!option.id || option.id.startsWith('temp-')) {
-          // NEW option - create it
-          console.log(`[updateTemplate] Creating new option: ${option.name}`);
-          
-          const newOptionResult = await query(
-            `INSERT INTO learning_options (template_id, name, description)
-             VALUES ($1, $2, $3)
-             RETURNING option_id`,
-            [templateId, option.name, option.description || null]
-          );
-          
-          const newOptionId = newOptionResult.rows[0].option_id;
-          console.log(`[updateTemplate] New option created with ID: ${newOptionId}`);
-          
-          // Create phases for the new option if provided
-          if (option.phases && Array.isArray(option.phases)) {
-            for (let i = 0; i < option.phases.length; i++) {
-              const phase = option.phases[i];
-              await query(
-                `INSERT INTO learning_phases 
-                 (option_id, title, description, icon, color, background_color, sequence_number)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [
-                  newOptionId,
-                  phase.title || 'New Phase',
-                  phase.description || null,
-                  phase.icon || 'brain',
-                  phase.color || 'rgba(98, 102, 241, 1)',
-                  phase.backgroundColor || phase.background_color || 'rgba(98, 102, 241, 0.1)',
-                  i + 1
-                ]
-              );
-            }
-          }
-        } else {
-          // EXISTING option - update it AND handle its phases
-          console.log(`[updateTemplate] Updating existing option ${option.id}: ${option.name}`);
-          optionsInNewData.push(option.id);
-          
-          // Update the option itself
-          await query(
-            `UPDATE learning_options
-             SET name = $1, description = $2, updated_at = CURRENT_TIMESTAMP
-             WHERE option_id = $3`,
-            [option.name, option.description || null, option.id]
-          );
-          
-          // Handle phases for this existing option
-          if (option.phases && Array.isArray(option.phases)) {
-            console.log(`[updateTemplate] Processing ${option.phases.length} phases for option ${option.id}`);
-            
-            // Get existing phases for this option
-            const existingPhasesResult = await query(
-              `SELECT phase_id FROM learning_phases WHERE option_id = $1`,
-              [option.id]
-            );
-            const existingPhaseIds = existingPhasesResult.rows.map((p: any) => p.phase_id);
-            console.log(`[updateTemplate] Found ${existingPhaseIds.length} existing phases`);
-            
-            const phasesInNewData: string[] = [];
-            
-            // Process each phase
-            for (let i = 0; i < option.phases.length; i++) {
-              const phase = option.phases[i];
-              
-              if (!phase.id || phase.id.startsWith('temp-')) {
-                // NEW phase - create it
-                console.log(`[updateTemplate] Creating new phase: ${phase.title}`);
-                
-                await query(
-                  `INSERT INTO learning_phases 
-                   (option_id, title, description, icon, color, background_color, sequence_number)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                  [
-                    option.id,
-                    phase.title || 'New Phase',
-                    phase.description || null,
-                    phase.icon || 'brain',
-                    phase.color || 'rgba(98, 102, 241, 1)',
-                    phase.backgroundColor || phase.background_color || 'rgba(98, 102, 241, 0.1)',
-                    i + 1
-                  ]
-                );
-              } else {
-                // EXISTING phase - update it
-                console.log(`[updateTemplate] Updating existing phase ${phase.id}: ${phase.title}`);
-                phasesInNewData.push(phase.id);
-                
-                await query(
-                  `UPDATE learning_phases
-                   SET title = $1, description = $2, icon = $3, color = $4, 
-                       background_color = $5, sequence_number = $6, updated_at = CURRENT_TIMESTAMP
-                   WHERE phase_id = $7`,
-                  [
-                    phase.title,
-                    phase.description || null,
-                    phase.icon,
-                    phase.color,
-                    phase.backgroundColor || phase.background_color,
-                    i + 1,
-                    phase.id
-                  ]
-                );
-              }
-            }
-            
-            // Delete phases that are not in the new data
-            const phasesToDelete = existingPhaseIds.filter(
-              (id: string) => !phasesInNewData.includes(id)
-            );
-            
-            if (phasesToDelete.length > 0) {
-              console.log(`[updateTemplate] Deleting ${phasesToDelete.length} removed phases`);
-              for (const phaseId of phasesToDelete) {
-                await query(
-                  `DELETE FROM learning_phases WHERE phase_id = $1`,
-                  [phaseId]
-                );
-              }
-            }
-          }
-        }
-      }
-      
-      // Delete options that are not in the new data
-      const optionsToDelete = existingOptionIds.filter(
-        (id: string) => !optionsInNewData.includes(id)
-      );
-      
-      if (optionsToDelete.length > 0) {
-        console.log(`[updateTemplate] Deleting ${optionsToDelete.length} removed options`);
-        for (const optionId of optionsToDelete) {
-          await query(
-            `DELETE FROM learning_options WHERE option_id = $1`,
-            [optionId]
-          );
-        }
-      }
-    }
-
-    console.log('[updateTemplate] Complete - fetching updated template');
-    
-    // Return the updated template with full data
-    return await getTemplateById(templateId);
-    
-  } catch (error: any) {
-    console.error('[updateTemplate] ERROR:', error.message);
-    throw error;
-  }
-}
-
-// Create an option
 export async function createOption(optionData: any) {
   try {
-    // Insert the option
     const newOptionResult = await query(
-      `
-      INSERT INTO learning_options (template_id, name, description)
-      VALUES ($1, $2, $3)
-      RETURNING *
-    `,
+      `INSERT INTO learning_options (template_id, name, description)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
       [
         optionData.templateId,
         optionData.name,
@@ -520,10 +420,8 @@ export async function createOption(optionData: any) {
       ]
     );
 
-    // Extract first row from result
     const newOption = newOptionResult.rows[0];
 
-    // Create phases if provided
     if (optionData.phases && optionData.phases.length > 0) {
       await Promise.all(
         optionData.phases.map(async (phase: any, index: number) => {
@@ -543,39 +441,32 @@ export async function createOption(optionData: any) {
   }
 }
 
-// Update an option
 export async function updateOption(optionId: string, optionData: any) {
   try {
-    // Update the option
     await query(
-      `
-      UPDATE learning_options
-      SET name = $1, description = $2, updated_at = CURRENT_TIMESTAMP
-      WHERE option_id = $3
-    `,
-      [optionData.name, optionData.description || null, optionId]
+      `UPDATE learning_options
+       SET name = $1, description = $2, updated_at = CURRENT_TIMESTAMP
+       WHERE option_id = $3`,
+      [
+        optionData.name, 
+        optionData.description || null,
+        optionId
+      ]
     );
 
-    // Handle phases separately (phases can be added/updated/deleted)
+    // Handle phases
     if (optionData.phases) {
-      // Get existing phases
       const existingPhasesResult = await query(
-        `
-        SELECT phase_id FROM learning_phases
-        WHERE option_id = $1
-      `,
+        `SELECT phase_id FROM learning_phases WHERE option_id = $1`,
         [optionId]
       );
 
-      // Extract rows from result
       const existingPhases = existingPhasesResult.rows;
-
       const existingPhaseIds = existingPhases.map((p: any) => p.phase_id);
       const newPhaseIds = optionData.phases
         .filter((p: any) => p.id)
         .map((p: any) => p.id);
 
-      // Delete phases not in the new data
       const phasesToDelete = existingPhaseIds.filter(
         (id: string) => !newPhaseIds.includes(id)
       );
@@ -584,17 +475,13 @@ export async function updateOption(optionId: string, optionData: any) {
         await Promise.all(
           phasesToDelete.map(async (phaseId: string) => {
             await query(
-              `
-              DELETE FROM learning_phases
-              WHERE phase_id = $1
-            `,
+              `DELETE FROM learning_phases WHERE phase_id = $1`,
               [phaseId]
             );
           })
         );
       }
 
-      // Update or create phases
       await Promise.all(
         optionData.phases.map(async (phase: any, index: number) => {
           if (phase.id && existingPhaseIds.includes(phase.id)) {
@@ -613,18 +500,12 @@ export async function updateOption(optionId: string, optionData: any) {
       );
     }
 
-    // Fetch the updated option with phases
     const optionResult = await query(
-      `
-      SELECT * FROM learning_options
-      WHERE option_id = $1
-    `,
+      `SELECT * FROM learning_options WHERE option_id = $1`,
       [optionId]
     );
 
-    // Extract first row from result
     const option = optionResult.rows[0];
-
     const phases = await getPhasesByOptionId(optionId);
     option.phases = phases;
 
@@ -635,18 +516,17 @@ export async function updateOption(optionId: string, optionData: any) {
   }
 }
 
-// Create a phase
 export async function createPhase(phaseData: any) {
   try {
-    // Insert the phase
+    // Handle AI config at phase level
+    const aiConfig = phaseData.aiContentGeneration || null;
+    
     const newPhaseResult = await query(
-      `
-      INSERT INTO learning_phases (
-        option_id, title, description, icon, color, background_color, sequence_number
+      `INSERT INTO learning_phases (
+        option_id, title, description, icon, color, background_color, sequence_number, ai_content_generation
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *
-    `,
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+      RETURNING *`,
       [
         phaseData.optionId,
         phaseData.title,
@@ -654,14 +534,13 @@ export async function createPhase(phaseData: any) {
         phaseData.icon,
         phaseData.color,
         phaseData.backgroundColor,
-        phaseData.sequenceNumber
+        phaseData.sequenceNumber,
+        aiConfig ? JSON.stringify(aiConfig) : null
       ]
     );
 
-    // Extract first row from result
     const newPhase = newPhaseResult.rows[0];
 
-    // Create metrics if provided
     if (phaseData.metrics && phaseData.metrics.length > 0) {
       await Promise.all(
         phaseData.metrics.map(async (metric: any, index: number) => {
@@ -681,22 +560,15 @@ export async function createPhase(phaseData: any) {
   }
 }
 
-// Update a phase
 export async function updatePhase(phaseId: string, phaseData: any) {
   try {
+    const aiConfig = phaseData.aiContentGeneration || null;
+    
     await query(
-      `
-      UPDATE learning_phases
-      SET 
-        title = $1,
-        description = $2,
-        icon = $3,
-        color = $4,
-        background_color = $5,
-        sequence_number = $6,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE phase_id = $7
-    `,
+      `UPDATE learning_phases
+       SET title = $1, description = $2, icon = $3, color = $4, 
+           background_color = $5, sequence_number = $6, ai_content_generation = $7::jsonb, updated_at = CURRENT_TIMESTAMP
+       WHERE phase_id = $8`,
       [
         phaseData.title,
         phaseData.description || null,
@@ -704,17 +576,14 @@ export async function updatePhase(phaseId: string, phaseData: any) {
         phaseData.color,
         phaseData.backgroundColor,
         phaseData.sequenceNumber,
+        aiConfig ? JSON.stringify(aiConfig) : null,
         phaseId
       ]
     );
 
-    // Handle metrics separately (metrics can be added/updated/deleted)
     if (phaseData.metrics) {
       const existingMetricsResult = await query(
-        `
-        SELECT metric_id FROM phase_metrics
-        WHERE phase_id = $1
-      `,
+        `SELECT metric_id FROM phase_metrics WHERE phase_id = $1`,
         [phaseId]
       );
 
@@ -724,25 +593,21 @@ export async function updatePhase(phaseId: string, phaseData: any) {
         .filter((m: any) => m.id)
         .map((m: any) => m.id);
 
-      // Delete metrics not in new data
       const metricsToDelete = existingMetricIds.filter(
         (id: string) => !newMetricIds.includes(id)
       );
+      
       if (metricsToDelete.length > 0) {
         await Promise.all(
           metricsToDelete.map(async (metricId: string) => {
             await query(
-              `
-              DELETE FROM phase_metrics
-              WHERE metric_id = $1
-            `,
+              `DELETE FROM phase_metrics WHERE metric_id = $1`,
               [metricId]
             );
           })
         );
       }
 
-      // Update or create metrics
       await Promise.all(
         phaseData.metrics.map(async (metric: any, index: number) => {
           if (metric.id && existingMetricIds.includes(metric.id)) {
@@ -761,12 +626,8 @@ export async function updatePhase(phaseId: string, phaseData: any) {
       );
     }
 
-    // Fetch the updated phase with metrics
     const phaseResult = await query(
-      `
-      SELECT * FROM learning_phases
-      WHERE phase_id = $1
-    `,
+      `SELECT * FROM learning_phases WHERE phase_id = $1`,
       [phaseId]
     );
 
@@ -781,24 +642,20 @@ export async function updatePhase(phaseId: string, phaseData: any) {
   }
 }
 
-// Create a metric
 export async function createMetric(metricData: any) {
   try {
-    // Prepare the default value based on type
     let defaultValue = metricData.defaultValue;
     if (defaultValue !== undefined && defaultValue !== null) {
       defaultValue = defaultValue.toString();
     }
 
     const newMetricResult = await query(
-      `
-      INSERT INTO phase_metrics (
+      `INSERT INTO phase_metrics (
         phase_id, name, description, metric_type, default_value,
         min_value, max_value, sequence_number
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING *
-    `,
+      RETURNING *`,
       [
         metricData.phaseId,
         metricData.name,
@@ -811,15 +668,13 @@ export async function createMetric(metricData: any) {
       ]
     );
 
-    const newMetric = newMetricResult.rows[0];
-    return newMetric;
+    return newMetricResult.rows[0];
   } catch (error) {
     console.error('Error creating metric:', error);
     throw new Error('Failed to create phase metric');
   }
 }
 
-// Update a metric
 export async function updateMetric(metricId: string, metricData: any) {
   try {
     let defaultValue = metricData.defaultValue;
@@ -828,19 +683,10 @@ export async function updateMetric(metricId: string, metricData: any) {
     }
 
     await query(
-      `
-      UPDATE phase_metrics
-      SET
-        name = $1,
-        description = $2,
-        metric_type = $3,
-        default_value = $4,
-        min_value = $5,
-        max_value = $6,
-        sequence_number = $7,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE metric_id = $8
-    `,
+      `UPDATE phase_metrics
+       SET name = $1, description = $2, metric_type = $3, default_value = $4,
+           min_value = $5, max_value = $6, sequence_number = $7, updated_at = CURRENT_TIMESTAMP
+       WHERE metric_id = $8`,
       [
         metricData.name,
         metricData.description || null,
@@ -854,23 +700,93 @@ export async function updateMetric(metricId: string, metricData: any) {
     );
 
     const metricResult = await query(
-      `
-      SELECT * FROM phase_metrics
-      WHERE metric_id = $1
-    `,
+      `SELECT * FROM phase_metrics WHERE metric_id = $1`,
       [metricId]
     );
 
-    const metric = metricResult.rows[0];
-    return metric;
+    return metricResult.rows[0];
   } catch (error) {
     console.error(`Error updating metric ${metricId}:`, error);
     throw new Error('Failed to update phase metric');
   }
 }
 
-// Delete a template
-// Fixed deleteTemplate function without created_by reference
+export async function updateTemplate(templateId: string, templateData: any) {
+  try {
+    const session = await auth();
+    if (!session || !session.user) {
+      throw new Error('Authentication required');
+    }
+
+    let complexityLevels = templateData.complexityLevels;
+    if (complexityLevels && typeof complexityLevels === 'object') {
+      complexityLevels = JSON.stringify(complexityLevels);
+    }
+
+    await query(
+      `UPDATE learning_templates
+       SET name = $1, description = $2, icon = $3, is_active = $4, 
+           template_category = $5, complexity_levels = $6::jsonb, updated_at = CURRENT_TIMESTAMP
+       WHERE template_id = $7`,
+      [
+        templateData.name,
+        templateData.description,
+        templateData.icon,
+        templateData.isActive,
+        templateData.templateCategory,
+        complexityLevels,
+        templateId
+      ]
+    );
+
+    if (templateData.options) {
+      const existingOptionsResult = await query(
+        `SELECT option_id FROM learning_options WHERE template_id = $1`,
+        [templateId]
+      );
+
+      const existingOptions = existingOptionsResult.rows;
+      const existingOptionIds = existingOptions.map((o: any) => o.option_id);
+      const newOptionIds = templateData.options
+        .filter((o: any) => o.id)
+        .map((o: any) => o.id);
+
+      const optionsToDelete = existingOptionIds.filter(
+        (id: string) => !newOptionIds.includes(id)
+      );
+
+      if (optionsToDelete.length > 0) {
+        await Promise.all(
+          optionsToDelete.map(async (optionId: string) => {
+            await query(
+              `DELETE FROM learning_options WHERE option_id = $1`,
+              [optionId]
+            );
+          })
+        );
+      }
+
+      await Promise.all(
+        templateData.options.map(async (option: any) => {
+          if (option.id && existingOptionIds.includes(option.id)) {
+            await updateOption(option.id, option);
+          } else {
+            await createOption({
+              ...option,
+              templateId
+            });
+          }
+        })
+      );
+    }
+
+    return await getTemplateById(templateId);
+  } catch (error) {
+    console.error(`Error updating template ${templateId}:`, error);
+    throw new Error('Failed to update learning template');
+  }
+}
+
 export async function deleteTemplate(templateId: string) {
   try {
     const session = await auth();
@@ -878,7 +794,6 @@ export async function deleteTemplate(templateId: string) {
       throw new Error('Authentication required');
     }
 
-    // Check if template exists (no JOIN needed since no created_by column)
     const templateResult = await query(
       `SELECT * FROM learning_templates WHERE template_id = $1`,
       [templateId]
@@ -889,18 +804,10 @@ export async function deleteTemplate(templateId: string) {
       throw new Error('Template not found');
     }
 
-    // Don't allow deletion of default templates
     if (template.is_default) {
       throw new Error('Default templates cannot be deleted');
     }
 
-    // For now, allow any authenticated user to delete non-default templates
-    // You can add admin check here if needed
-    // if (!isAdmin(session)) {
-    //   throw new Error('Not authorized to delete this template');
-    // }
-
-    // Delete the template (will cascade to options, phases, and metrics)
     await query(
       `DELETE FROM learning_templates WHERE template_id = $1`,
       [templateId]
@@ -913,15 +820,10 @@ export async function deleteTemplate(templateId: string) {
   }
 }
 
-
-// Helper function to check if user is admin
 function isAdmin(session: any): boolean {
-  // Implement your admin check logic here
-  // For example, check against a list of admin emails or roles in session
   return session?.user?.email === 'admin@example.com';
 }
 
-// Export all functions
 export default {
   getTemplates,
   getTemplateById,

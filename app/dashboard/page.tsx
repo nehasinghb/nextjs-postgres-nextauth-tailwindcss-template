@@ -54,7 +54,6 @@ export default function DashboardPage() {
             </div>
           </div>
         </CardContent>
-
       </Card>
 
       {/* User Management Card */}
@@ -66,33 +65,42 @@ export default function DashboardPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <div className="flex items-center space-x-4 rounded-md border p-4">
-            <Users className="h-5 w-5 text-primary" />
-            <div className="flex-1 space-y-1">
-              <p className="text-sm font-medium leading-none">User Profiles</p>
-              <p className="text-sm text-muted-foreground">
-                Manage user accounts, roles, and access permissions
-              </p>
+          {/* Made User Profiles clickable */}
+          <Link href="/dashboard/user-profile">
+            <div className="flex items-center space-x-4 rounded-md border p-4 hover:bg-muted/50 transition-colors cursor-pointer">
+              <Users className="h-5 w-5 text-primary" />
+              <div className="flex-1 space-y-1">
+                <p className="text-sm font-medium leading-none">User Profiles</p>
+                <p className="text-sm text-muted-foreground">
+                  Manage user accounts, roles, and access permissions
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center space-x-4 rounded-md border p-4">
-            <Settings className="h-5 w-5 text-primary" />
-            <div className="flex-1 space-y-1">
-              <p className="text-sm font-medium leading-none">Settings</p>
-              <p className="text-sm text-muted-foreground">
-                Configure system preferences and organization settings
-              </p>
+          </Link>
+          {/* Made Settings clickable */}
+          <Link href="/dashboard/settings">
+            <div className="flex items-center space-x-4 rounded-md border p-4 hover:bg-muted/50 transition-colors cursor-pointer">
+              <Settings className="h-5 w-5 text-primary" />
+              <div className="flex-1 space-y-1">
+                <p className="text-sm font-medium leading-none">Settings</p>
+                <p className="text-sm text-muted-foreground">
+                  Configure system preferences and organization settings
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center space-x-4 rounded-md border p-4">
-            <CreditCard className="h-5 w-5 text-primary" />
-            <div className="flex-1 space-y-1">
-              <p className="text-sm font-medium leading-none">Subscription Management</p>
-              <p className="text-sm text-muted-foreground">
-                View and manage subscription plans and billing details
-              </p>
+          </Link>
+          {/* Made Subscription Management clickable */}
+          <Link href="/dashboard/subscription">
+            <div className="flex items-center space-x-4 rounded-md border p-4 hover:bg-muted/50 transition-colors cursor-pointer">
+              <CreditCard className="h-5 w-5 text-primary" />
+              <div className="flex-1 space-y-1">
+                <p className="text-sm font-medium leading-none">Subscription Management</p>
+                <p className="text-sm text-muted-foreground">
+                  View and manage subscription plans and billing details
+                </p>
+              </div>
             </div>
-          </div>
+          </Link>
         </CardContent>
         <CardFooter>
           <Button variant="outline" className="w-full">
